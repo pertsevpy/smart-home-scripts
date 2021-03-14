@@ -20,8 +20,18 @@ from huawei_lte_api.Connection import Connection
 # https://pypi.org/project/paho-mqtt/
 import paho.mqtt.publish as publish
 
-# Wrapper for Python keyring library 
+# Wrapper for keyring library
 import credentials_data
+
+# variable definitions
+# ###### in progress....
+idx = {
+    'rsrq':    20,
+    'rsrp':    21,
+    'rssi':    22,
+    'sinr':    23,
+    'cell_id': 24
+}
 
 
 class MQTT_client():
@@ -102,15 +112,16 @@ class domoticz_client():
         return self.parsingData(j)
 # ########### class domoticz_client ##########################################
 
+
 class router_client():
     def __init__(self, hostname="192.168.8.1", username="admin",
-                                               password="admin"):
+                 password="admin"):
         self.hostname = hostname
         self.username = username
         self.password = password
 
         connection = AuthorizedConnection('http://' +
-                        username + ':' + password + '@' + hostname + '/')
+                                          username + ':' + password + '@' + hostname + '/')
         self.client = Client(connection)
 
         # print(client.device.information())  # Needs valid authorization,
@@ -122,33 +133,34 @@ class router_client():
         if data['rssi'] == ">=-51dBm":
             data['rssi'] = "-51"
         return data
-        
+
     def get_stat(self):
         return self.client.monitoring.traffic_statistics()
 
 # ########### class router_client ##########################################
 
+
 # Initialization MQTT client
 # нужно сделать красиво
 mqtt_client = MQTT_client(
-                credentials_data.get_cred("mqtt")["hostname"],
-                credentials_data.get_cred("mqtt")["port"],
-                credentials_data.get_cred("mqtt")["username"],
-                credentials_data.get_cred("mqtt")["password"])
+    credentials_data.get_cred("mqtt")["hostname"],
+    credentials_data.get_cred("mqtt")["port"],
+    credentials_data.get_cred("mqtt")["username"],
+    credentials_data.get_cred("mqtt")["password"])
 
 # Initialization Domoticz client
 dz = domoticz_client(
-                "http://" +
-                credentials_data.get_cred("domoticz")["hostname"] + ":" + 
-            str(credentials_data.get_cred("domoticz")["port"]),
-                credentials_data.get_cred("domoticz")["username"],
-                credentials_data.get_cred("domoticz")["password"])
+    "http://" +
+    credentials_data.get_cred("domoticz")["hostname"] + ":" +
+    str(credentials_data.get_cred("domoticz")["port"]),
+    credentials_data.get_cred("domoticz")["username"],
+    credentials_data.get_cred("domoticz")["password"])
 
-# Initialization Router client              
+# Initialization Router client
 router = router_client(
-                credentials_data.get_cred("router")["hostname"],
-                credentials_data.get_cred("router")["username"],
-                credentials_data.get_cred("router")["password"])
+    credentials_data.get_cred("router")["hostname"],
+    credentials_data.get_cred("router")["username"],
+    credentials_data.get_cred("router")["password"])
 
 data = router.get_signal()
 
