@@ -247,14 +247,13 @@ if __name__ == "__main__":
         mqtt_client.command_MQTT('setuservariable', 8, '0')
         mqtt_client.pub_MQTT(26, '0')
         mqtt_client.pub_MQTT(27, '0')
-
-        # обнуляем месячные счетчики
+        # обнуляем месячные счетчики в Domoticz
         if float(timeD) == reset_date:
             mqtt_client.pub_MQTT(26, '0')
             mqtt_client.pub_MQTT(27, '0')
             mqtt_client.pub_MQTT(28, '0')
             mqtt_client.pub_MQTT(29, '0')
-
+        # Обнуляет трафик на роутере 
         router.reset_traf()
-        
+
     sys.exit()
