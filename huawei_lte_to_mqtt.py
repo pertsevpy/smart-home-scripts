@@ -3,7 +3,15 @@
 """
 Script for receiving data from the Internet traffic
 of the Huawei E5186 router (and etc.) and sending MQTT data
-for the Domoticz Smart Home system
+for the Domoticz Smart Home system.
+The script should be called every 5 minutes.
+You have to use cron or daemonize it yourself.
+
+No guarantees. Use at Your own risk. Even that it will work as intended.
+Happiness for everybody, free, and no one will go away unsatisfied!
+    (Arkady Strugatsky, Roadside Picnic)
+MIT License 
+https://github.com/pertsevpy
 """
 
 import sys
@@ -23,15 +31,35 @@ import paho.mqtt.publish as publish
 # Wrapper for keyring library
 import credentials_data
 
-# variable definitions
-# ###### in progress....
-idx = {
+# Variable definitions
+# idx Domoticz for LTE signal
+# Don't change the key names idx_signal,
+# they are used in huawei_lte_api
+idx_signal = {
     'rsrq':    20,
     'rsrp':    21,
     'rssi':    22,
     'sinr':    23,
     'cell_id': 24
 }
+
+# idx Domoticz for traffic statistics
+idx_traffic = {
+    'TotalDownload': 26,
+    'TotalUpload':   27,
+    'monthDL':       28,
+    'monthUL':       29,
+    'awgDL':         177,
+    'awgUL':         178
+}
+
+idx_traffic_variable = {
+    'TotalDownload': 7,
+    'TotalUpload':   8
+}
+
+# date for resetting traffic statistics (int type)
+reset_date = 5
 
 
 class MQTT_client():
@@ -121,7 +149,8 @@ class router_client():
         self.password = password
 
         connection = AuthorizedConnection('http://' +
-                                          username + ':' + password + '@' + hostname + '/')
+                                          username + ':' + password + '@' +
+                                          hostname + '/')
         self.client = Client(connection)
 
         # print(client.device.information())  # Needs valid authorization,
@@ -136,95 +165,96 @@ class router_client():
 
     def get_stat(self):
         return self.client.monitoring.traffic_statistics()
+    
+    def reset_traf(self):
+        # clear the traffic history on the router
+        self.client.monitoring.set_clear_traffic()
+# ########### class router_client ############################################
 
-# ########### class router_client ##########################################
+if __name__ == "__main__":
+    # Initialization MQTT client
+    mqtt_client = MQTT_client(
+        credentials_data.get_cred("mqtt")["hostname"],
+        credentials_data.get_cred("mqtt")["port"],
+        credentials_data.get_cred("mqtt")["username"],
+        credentials_data.get_cred("mqtt")["password"])
 
+    # Initialization Domoticz client
+    dz = domoticz_client(
+        "http://" +
+        credentials_data.get_cred("domoticz")["hostname"] + ":" +
+        str(credentials_data.get_cred("domoticz")["port"]),
+        credentials_data.get_cred("domoticz")["username"],
+        credentials_data.get_cred("domoticz")["password"])
 
-# Initialization MQTT client
-# нужно сделать красиво
-mqtt_client = MQTT_client(
-    credentials_data.get_cred("mqtt")["hostname"],
-    credentials_data.get_cred("mqtt")["port"],
-    credentials_data.get_cred("mqtt")["username"],
-    credentials_data.get_cred("mqtt")["password"])
+    # Initialization Router client
+    router = router_client(
+        credentials_data.get_cred("router")["hostname"],
+        credentials_data.get_cred("router")["username"],
+        credentials_data.get_cred("router")["password"])
 
-# Initialization Domoticz client
-dz = domoticz_client(
-    "http://" +
-    credentials_data.get_cred("domoticz")["hostname"] + ":" +
-    str(credentials_data.get_cred("domoticz")["port"]),
-    credentials_data.get_cred("domoticz")["username"],
-    credentials_data.get_cred("domoticz")["password"])
+    # get LTE signal data from router
+    data = router.get_signal()
 
-# Initialization Router client
-router = router_client(
-    credentials_data.get_cred("router")["hostname"],
-    credentials_data.get_cred("router")["username"],
-    credentials_data.get_cred("router")["password"])
+    # MQTT pub signal variable
+    for key in idx_signal:
+        mqtt_client.pub_MQTT(idx_signal[key], data.get(key))
 
-data = router.get_signal()
+    # get traffic statistics
+    data = router.get_stat()
 
-mqtt_client.pub_MQTT(20, data.get('rsrq'))
-mqtt_client.pub_MQTT(21, data.get('rsrp'))
-mqtt_client.pub_MQTT(22, data.get('rssi'))
-mqtt_client.pub_MQTT(23, data.get('sinr'))
-mqtt_client.pub_MQTT(24, data.get('cell_id'))
-
-# получаем статистику трафика
-data = router.get_stat()
-
-# переводим в гигабайты
-data['TotalDownload'] = str(
-    round(float(data['TotalDownload'])/1024/1024/1024, 3))
-data['TotalUpload'] = str(round(float(data['TotalUpload'])/1024/1024/1024, 3))
-
-
-mqtt_client.pub_MQTT(26, data.get('TotalDownload'))
-mqtt_client.pub_MQTT(27, data.get('TotalUpload'))
-
-prevDL = float(dz.getUserVariables(7)['Data'])  # Download_prev
-prevUL = float(dz.getUserVariables(8)['Data'])
-
-diffDL = float(data['TotalDownload']) - float(prevDL)
-diffUL = float(data['TotalUpload']) - float(prevUL)
-
-awgDL = round(diffDL * 1024 * 1024 / (60 * 5), 2)
-awgUL = round(diffUL * 1024 * 1024 / (60 * 5), 2)
-
-mqtt_client.pub_MQTT(177, str(awgDL))
-mqtt_client.pub_MQTT(178, str(awgUL))
+    # translate to Gigabytes
+    data['TotalDownload'] = str(
+        round(float(data['TotalDownload'])/1024/1024/1024, 3))
+    data['TotalUpload'] = str(
+        round(float(data['TotalUpload'])/1024/1024/1024, 3))
 
 
-# в месячную нужно будет плюсовать разницу
-monthDL = float(dz.getDevice(28)['Data']) + diffDL
-monthUL = float(dz.getDevice(29)['Data']) + diffUL
+    mqtt_client.pub_MQTT(26, data.get('TotalDownload'))
+    mqtt_client.pub_MQTT(27, data.get('TotalUpload'))
 
-mqtt_client.pub_MQTT(28, str(monthDL))
-mqtt_client.pub_MQTT(29, str(monthUL))
+    prevDL = float(dz.getUserVariables(7)['Data'])  # Download_prev
+    prevUL = float(dz.getUserVariables(8)['Data'])
 
-mqtt_client.command_MQTT('setuservariable', 7, data['TotalDownload'])
-mqtt_client.command_MQTT('setuservariable', 8, data['TotalUpload'])
+    diffDL = float(data['TotalDownload']) - float(prevDL)
+    diffUL = float(data['TotalUpload']) - float(prevUL)
+
+    awgDL = round(diffDL * 1024 * 1024 / (60 * 5), 2)
+    awgUL = round(diffUL * 1024 * 1024 / (60 * 5), 2)
+
+    mqtt_client.pub_MQTT(177, str(awgDL))
+    mqtt_client.pub_MQTT(178, str(awgUL))
 
 
-today = datetime.datetime.today()
-timeHM = today.strftime("%H%M")
-timeD = today.strftime("%d")
-# время от 00:00:00 до 00:04:59
-if float(timeHM) >= 0 and float(timeHM) < 5:
-    # обнуляем дневные счетчики в начале нового дня
-    mqtt_client.command_MQTT('setuservariable', 7, '0')
-    mqtt_client.command_MQTT('setuservariable', 8, '0')
-    mqtt_client.pub_MQTT(26, '0')
-    mqtt_client.pub_MQTT(27, '0')
+    # в месячную нужно будет плюсовать разницу
+    monthDL = float(dz.getDevice(28)['Data']) + diffDL
+    monthUL = float(dz.getDevice(29)['Data']) + diffUL
 
-    # 5 числа обнуляем месячные счетчики
-    if float(timeD) == 5:
+    mqtt_client.pub_MQTT(28, str(monthDL))
+    mqtt_client.pub_MQTT(29, str(monthUL))
+
+    mqtt_client.command_MQTT('setuservariable', 7, data['TotalDownload'])
+    mqtt_client.command_MQTT('setuservariable', 8, data['TotalUpload'])
+
+
+    today = datetime.datetime.today()
+    timeHM = today.strftime("%H%M")
+    timeD = today.strftime("%d")
+    # время от 00:00:00 до 00:04:59
+    if float(timeHM) >= 0 and float(timeHM) < 5:
+        # обнуляем дневные счетчики в начале нового дня
+        mqtt_client.command_MQTT('setuservariable', 7, '0')
+        mqtt_client.command_MQTT('setuservariable', 8, '0')
         mqtt_client.pub_MQTT(26, '0')
         mqtt_client.pub_MQTT(27, '0')
-        mqtt_client.pub_MQTT(28, '0')
-        mqtt_client.pub_MQTT(29, '0')
 
-    # clear the traffic history on the router
-    client.monitoring.set_clear_traffic()
+        # обнуляем месячные счетчики
+        if float(timeD) == reset_date:
+            mqtt_client.pub_MQTT(26, '0')
+            mqtt_client.pub_MQTT(27, '0')
+            mqtt_client.pub_MQTT(28, '0')
+            mqtt_client.pub_MQTT(29, '0')
 
-sys.exit()
+        router.reset_traf()
+        
+    sys.exit()
