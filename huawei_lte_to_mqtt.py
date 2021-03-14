@@ -125,6 +125,7 @@ class router_client():
 # ########### class router_client ##########################################
 
 # Initialization MQTT client
+# нужно сделать красиво
 mqtt_client = MQTT_client(
                 credentials_data.get_cred("mqtt")["hostname"],
                 credentials_data.get_cred("mqtt")["port"],
