@@ -117,7 +117,11 @@ class router_client():
         # will throw exception if invalid credentials are passed in URL
 
     def get_signal(self):
-        return self.client.device.signal()
+        data = self.client.device.signal()
+        # Validation RSSI: str(Int) only!
+        if data['rssi'] == ">=-51dBm":
+            data['rssi'] = "-51"
+        return data
         
     def get_stat(self):
         return self.client.monitoring.traffic_statistics()
@@ -140,17 +144,13 @@ dz = domoticz_client(
                 credentials_data.get_cred("domoticz")["username"],
                 credentials_data.get_cred("domoticz")["password"])
 
-  # Initialization Router client              
+# Initialization Router client              
 router = router_client(
                 credentials_data.get_cred("router")["hostname"],
                 credentials_data.get_cred("router")["username"],
                 credentials_data.get_cred("router")["password"])
 
 data = router.get_signal()
-
-# Публикуем уровень сигнала
-if data['rssi'] == ">=-51dBm":
-    data['rssi'] = "-51"
 
 mqtt_client.pub_MQTT(20, data.get('rsrq'))
 mqtt_client.pub_MQTT(21, data.get('rsrp'))
