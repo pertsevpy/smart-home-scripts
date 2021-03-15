@@ -32,9 +32,10 @@ import paho.mqtt.publish as publish
 import credentials_data
 
 # Variable definitions
-# idx Domoticz for LTE signal
-# Don't change the key names idx_signal,
-# they are used in huawei_lte_api
+# These IDX values must match your Domoticz settings.
+# ###################################################
+# idx Domoticz device (custom) for LTE signal
+# Don't change the key names idx_signal, they are used in huawei_lte_api
 idx_signal = {
     'rsrq':    20,
     'rsrp':    21,
@@ -43,7 +44,7 @@ idx_signal = {
     'cell_id': 24
 }
 
-# idx Domoticz for traffic statistics
+# idx Domoticz device for traffic statistics
 idx_traffic = {
     'TotalDownload': 26,
     'TotalUpload':   27,
@@ -53,6 +54,7 @@ idx_traffic = {
     'awgUL':         178
 }
 
+# idx Domoticz variable for traffic statistics
 idx_traffic_variable = {
     'TotalDownload': 7,
     'TotalUpload':   8
@@ -65,18 +67,19 @@ reset_date = 5
 class MQTT_client():
     def __init__(self, hostname="localhost", port=1883, username=None,
                  password=None, topic="domoticz/in"):
-        self.hostname = hostname
-        self.port = port
-        self.username = username
-        self.password = password
-        self.auth = {'username': self.username, 'password': self.password}
-        self.topic = topic
+        self.__hostname = hostname
+        self.__port = port
+        self.__username = username
+        self.__password = password
+        self.__auth = {'username': self.__username,
+                       'password': self.__password}
+        self.__topic = topic
 
     def pub(self, msg, retained=False):
         # print("Connecting {}".format(configMQTT.mqtt_cred["hostname"]))
-        publish.single(self.topic, payload=msg, retain=retained,
-                       hostname=self.hostname, port=self.port,
-                       keepalive=10, will=None, auth=self.auth)
+        publish.single(self.__topic, payload=msg, retain=retained,
+                       hostname=self.__hostname, port=self.__port,
+                       keepalive=10, will=None, auth=self.__auth)
 
     def pub_MQTT(self, idx, val):
         send_data1 = {
@@ -98,14 +101,16 @@ class MQTT_client():
 
 
 class domoticz_client():
-    def __init__(self, hostname="localhost", username=None, password=None):
-        self.domoticzserver = hostname
-        self.domoticzusername = username
-        self.domoticzpassword = password
+    def __init__(self, hostname="localhost", port=8080,
+                 username=None, password=None):
+        self.__domoticzserver = "http://" + hostname + ":" + str(port)
+        self.__domoticzusername = username
+        self.__domoticzpassword = password
 
     def domoticz_requests(self, path):
-        r = requests.get(self.domoticzserver + path,
-                         auth=(self.domoticzusername, self.domoticzpassword),
+        r = requests.get(self.__domoticzserver + path,
+                         auth=(self.__domoticzusername,
+                               self.__domoticzpassword),
                          verify=True)
         if r.status_code == 200:
             j = loads(r.text)
@@ -122,7 +127,7 @@ class domoticz_client():
             sensor_data = dictdata['Value']
         else:
             sensor_data = None
-            # пробел - разделитель значения и именования единиц
+            # Space - Divider Values and Naming Units
         i2 = sensor_data.find(' ')
         if i2 > 0:
             sensor_data = sensor_data[0: i2]
@@ -133,24 +138,25 @@ class domoticz_client():
     def getUserVariables(self, idx):
         j = self.domoticz_requests(
             '/json.htm?type=command&param=getuservariable&idx='+str(idx))
-        return self.parsingData(j)
+        return self.parsingData(j)['Data']
 
     def getDevice(self, idx):
         j = self.domoticz_requests('/json.htm?type=devices&rid='+str(idx))
-        return self.parsingData(j)
+        return self.parsingData(j)['Data']
 # ########### class domoticz_client ##########################################
 
 
 class router_client():
     def __init__(self, hostname="192.168.8.1", username="admin",
                  password="admin"):
-        self.hostname = hostname
-        self.username = username
-        self.password = password
+        self.__hostname = hostname
+        self.__username = username
+        self.__password = password
 
         connection = AuthorizedConnection('http://' +
-                                          username + ':' + password + '@' +
-                                          hostname + '/')
+                                          self.__username + ':' +
+                                          self.__password + '@' +
+                                          self.__hostname + '/')
         self.client = Client(connection)
 
         # print(client.device.information())  # Needs valid authorization,
@@ -173,6 +179,7 @@ class router_client():
 
 
 if __name__ == "__main__":
+    # MAIN function
     # Initialization MQTT client
     mqtt_client = MQTT_client(
         credentials_data.get_cred("mqtt")["hostname"],
@@ -182,9 +189,8 @@ if __name__ == "__main__":
 
     # Initialization Domoticz client
     dz = domoticz_client(
-        "http://" +
-        credentials_data.get_cred("domoticz")["hostname"] + ":" +
-        str(credentials_data.get_cred("domoticz")["port"]),
+        credentials_data.get_cred("domoticz")["hostname"],
+        credentials_data.get_cred("domoticz")["port"],
         credentials_data.get_cred("domoticz")["username"],
         credentials_data.get_cred("domoticz")["password"])
 
@@ -195,49 +201,55 @@ if __name__ == "__main__":
         credentials_data.get_cred("router")["password"])
 
     # get LTE signal data from router
-    data = router.get_signal()
+    signal_data = router.get_signal()
 
     # MQTT pub signal variable
     for key in idx_signal:
-        mqtt_client.pub_MQTT(idx_signal[key], data.get(key))
+        mqtt_client.pub_MQTT(idx_signal[key], signal_data.get(key))
+    del signal_data # We got everything we wanted from you
 
     # get traffic statistics
-    data = router.get_stat()
+    traf_data = router.get_stat()
 
     # translate to Gigabytes
-    data['TotalDownload'] = str(
-        round(float(data['TotalDownload'])/1024/1024/1024, 3))
-    data['TotalUpload'] = str(
-        round(float(data['TotalUpload'])/1024/1024/1024, 3))
+    traf_data['TotalDownload'] = str(
+        round(float(traf_data['TotalDownload'])/1024/1024/1024, 3))
+    traf_data['TotalUpload'] = str(
+        round(float(traf_data['TotalUpload'])/1024/1024/1024, 3))
 
-    mqtt_client.pub_MQTT(26, data.get('TotalDownload'))
-    mqtt_client.pub_MQTT(27, data.get('TotalUpload'))
+    mqtt_client.pub_MQTT(idx_traffic['TotalDownload'],
+                         traf_data.get('TotalDownload'))
+    mqtt_client.pub_MQTT(idx_traffic['TotalUpload'],
+                         traf_data.get('TotalUpload'))
 
-    prevDL = float(dz.getUserVariables(7)['Data'])  # Download_prev
-    prevUL = float(dz.getUserVariables(8)['Data'])
+    # Huawei E5186 does not display the current speed.
+    # We will consider averaged in 5 minutes
+    # prevDL prevUL in UserVariables used as a temporary value.
+    prevDL = float(dz.getUserVariables(idx_traffic_variable['TotalDownload']))
+    prevUL = float(dz.getUserVariables(idx_traffic_variable['TotalUpload']))
 
-    diffDL = float(data['TotalDownload']) - float(prevDL)
-    diffUL = float(data['TotalUpload']) - float(prevUL)
+    diffDL = float(traf_data['TotalDownload']) - float(prevDL)
+    diffUL = float(traf_data['TotalUpload']) - float(prevUL)
 
     awgDL = round(diffDL * 1024 * 1024 / (60 * 5), 2)
     awgUL = round(diffUL * 1024 * 1024 / (60 * 5), 2)
 
-    mqtt_client.pub_MQTT(177, str(awgDL))
-    mqtt_client.pub_MQTT(178, str(awgUL))
+    mqtt_client.pub_MQTT(idx_traffic['awgDL'], str(awgDL))
+    mqtt_client.pub_MQTT(idx_traffic['awgUL'], str(awgUL))
 
-    # в месячную нужно будет плюсовать разницу
-    monthDL = float(dz.getDevice(28)['Data']) + diffDL
-    monthUL = float(dz.getDevice(29)['Data']) + diffUL
+    # In the monthly one will need to plus the difference
+    monthDL = float(dz.getDevice(idx_traffic['monthDL'])) + diffDL
+    monthUL = float(dz.getDevice(idx_traffic['monthUL'])) + diffUL
 
-    mqtt_client.pub_MQTT(28, str(monthDL))
-    mqtt_client.pub_MQTT(29, str(monthUL))
+    mqtt_client.pub_MQTT(idx_traffic['monthDL'], str(monthDL))
+    mqtt_client.pub_MQTT(idx_traffic['monthUL'], str(monthUL))
 
     mqtt_client.command_MQTT('setuservariable',
                              idx_traffic_variable['TotalDownload'],
-                             data['TotalDownload'])
+                             traf_data['TotalDownload'])
     mqtt_client.command_MQTT('setuservariable',
                              idx_traffic_variable['TotalUpload'],
-                             data['TotalUpload'])
+                             traf_data['TotalUpload'])
 
     today = datetime.datetime.today()
     timeHM = today.strftime("%H%M")
