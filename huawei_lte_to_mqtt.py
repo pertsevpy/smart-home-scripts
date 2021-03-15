@@ -65,6 +65,7 @@ reset_date = 5
 
 
 class MQTT_client():
+    """paho.mqtt wrapper for Domoticz MQTT"""
     def __init__(self, hostname="localhost", port=1883, username=None,
                  password=None, topic="domoticz/in"):
         self.__hostname = hostname
@@ -75,7 +76,7 @@ class MQTT_client():
                        'password': self.__password}
         self.__topic = topic
 
-    def pub(self, msg, retained=False):
+    def __pub(self, msg, retained=False):
         # print("Connecting {}".format(configMQTT.mqtt_cred["hostname"]))
         publish.single(self.__topic, payload=msg, retain=retained,
                        hostname=self.__hostname, port=self.__port,
@@ -87,7 +88,7 @@ class MQTT_client():
             'RSSI': 0,
             'nvalue': 0,
             'svalue': val}
-        self.pub(dumps(send_data1))  # dumps for JSON format: '' to ""
+        self.__pub(dumps(send_data1))  # dumps for JSON format: '' to ""
         time.sleep(0.1)
 
     def command_MQTT(self, command, idx, value):
@@ -95,7 +96,7 @@ class MQTT_client():
             'command': command,
             'idx': idx,
             'value': value}
-        self.pub(dumps(send_data1))
+        self.__pub(dumps(send_data1))
         time.sleep(0.1)
 # ########### class MQTT_client ##############################################
 
@@ -120,6 +121,9 @@ class domoticz_client():
         return j
 
     def parsingData(self, data):
+        """Parsing JSON of Domoticz response to find the value
+        of the requested parameter and
+        the date of the last sensor update (not used now)."""
         dictdata = (data['result'])[0]
         if ('Data' in dictdata):
             sensor_data = dictdata['Data']
@@ -136,11 +140,13 @@ class domoticz_client():
         return d
 
     def getUserVariables(self, idx):
+        """Get the Domoticz User Variables value for idx"""
         j = self.domoticz_requests(
             '/json.htm?type=command&param=getuservariable&idx='+str(idx))
         return self.parsingData(j)['Data']
 
     def getDevice(self, idx):
+        """Get the Domoticz sensor value for idx"""
         j = self.domoticz_requests('/json.htm?type=devices&rid='+str(idx))
         return self.parsingData(j)['Data']
 # ########### class domoticz_client ##########################################
@@ -251,12 +257,13 @@ if __name__ == "__main__":
                              idx_traffic_variable['TotalUpload'],
                              traf_data['TotalUpload'])
 
+    # Reset traf on day or month
     today = datetime.datetime.today()
     timeHM = today.strftime("%H%M")
     timeD = today.strftime("%d")
     # Time Ot 00:00:00 to 00:04:59
     if float(timeHM) >= 0 and float(timeHM) < 5:
-        # reset the day counters at the beginning of the new day
+        # reset the day counters in Domoticz at the beginning of the new day
         mqtt_client.command_MQTT('setuservariable',
                                  idx_traffic_variable['TotalDownload'], '0')
         mqtt_client.command_MQTT('setuservariable',
@@ -269,7 +276,7 @@ if __name__ == "__main__":
             mqtt_client.pub_MQTT(idx_traffic['TotalUpload'], '0')
             mqtt_client.pub_MQTT(idx_traffic['monthDL'], '0')
             mqtt_client.pub_MQTT(idx_traffic['monthUL'], '0')
-        # resetTrafficOnTheRouter
+        # reset Traffic on the Router
         router.reset_traf()
 
     sys.exit()
