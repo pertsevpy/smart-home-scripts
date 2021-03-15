@@ -165,11 +165,12 @@ class router_client():
 
     def get_stat(self):
         return self.client.monitoring.traffic_statistics()
-    
+
     def reset_traf(self):
         # clear the traffic history on the router
         self.client.monitoring.set_clear_traffic()
 # ########### class router_client ############################################
+
 
 if __name__ == "__main__":
     # Initialization MQTT client
@@ -209,7 +210,6 @@ if __name__ == "__main__":
     data['TotalUpload'] = str(
         round(float(data['TotalUpload'])/1024/1024/1024, 3))
 
-
     mqtt_client.pub_MQTT(26, data.get('TotalDownload'))
     mqtt_client.pub_MQTT(27, data.get('TotalUpload'))
 
@@ -225,7 +225,6 @@ if __name__ == "__main__":
     mqtt_client.pub_MQTT(177, str(awgDL))
     mqtt_client.pub_MQTT(178, str(awgUL))
 
-
     # в месячную нужно будет плюсовать разницу
     monthDL = float(dz.getDevice(28)['Data']) + diffDL
     monthUL = float(dz.getDevice(29)['Data']) + diffUL
@@ -233,27 +232,32 @@ if __name__ == "__main__":
     mqtt_client.pub_MQTT(28, str(monthDL))
     mqtt_client.pub_MQTT(29, str(monthUL))
 
-    mqtt_client.command_MQTT('setuservariable', 7, data['TotalDownload'])
-    mqtt_client.command_MQTT('setuservariable', 8, data['TotalUpload'])
-
+    mqtt_client.command_MQTT('setuservariable',
+                             idx_traffic_variable['TotalDownload'],
+                             data['TotalDownload'])
+    mqtt_client.command_MQTT('setuservariable',
+                             idx_traffic_variable['TotalUpload'],
+                             data['TotalUpload'])
 
     today = datetime.datetime.today()
     timeHM = today.strftime("%H%M")
     timeD = today.strftime("%d")
-    # время от 00:00:00 до 00:04:59
+    # Time Ot 00:00:00 to 00:04:59
     if float(timeHM) >= 0 and float(timeHM) < 5:
-        # обнуляем дневные счетчики в начале нового дня
-        mqtt_client.command_MQTT('setuservariable', 7, '0')
-        mqtt_client.command_MQTT('setuservariable', 8, '0')
-        mqtt_client.pub_MQTT(26, '0')
-        mqtt_client.pub_MQTT(27, '0')
-        # обнуляем месячные счетчики в Domoticz
+        # reset the day counters at the beginning of the new day
+        mqtt_client.command_MQTT('setuservariable',
+                                 idx_traffic_variable['TotalDownload'], '0')
+        mqtt_client.command_MQTT('setuservariable',
+                                 idx_traffic_variable['TotalUpload'], '0')
+        mqtt_client.pub_MQTT(idx_traffic['TotalDownload'], '0')
+        mqtt_client.pub_MQTT(idx_traffic['TotalUpload'], '0')
+        # reset the monthly counters in Domoticz
         if float(timeD) == reset_date:
-            mqtt_client.pub_MQTT(26, '0')
-            mqtt_client.pub_MQTT(27, '0')
-            mqtt_client.pub_MQTT(28, '0')
-            mqtt_client.pub_MQTT(29, '0')
-        # Обнуляет трафик на роутере 
+            mqtt_client.pub_MQTT(idx_traffic['TotalDownload'], '0')
+            mqtt_client.pub_MQTT(idx_traffic['TotalUpload'], '0')
+            mqtt_client.pub_MQTT(idx_traffic['monthDL'], '0')
+            mqtt_client.pub_MQTT(idx_traffic['monthUL'], '0')
+        # resetTrafficOnTheRouter
         router.reset_traf()
 
     sys.exit()
