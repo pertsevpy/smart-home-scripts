@@ -63,6 +63,10 @@ idx_traffic_variable = {
 # date for resetting traffic statistics (int type)
 reset_date = 5
 
+def bytes_to_gigabytes(B):
+    Gb = round(float(B)/1024/1024/1024, 3)
+    return Gb
+
 
 class MQTT_client():
     """paho.mqtt wrapper for Domoticz MQTT"""
@@ -219,9 +223,9 @@ if __name__ == "__main__":
 
     # translate to Gigabytes
     traf_data['TotalDownload'] = str(
-        round(float(traf_data['TotalDownload'])/1024/1024/1024, 3))
+        bytes_to_gigabytes(traf_data['TotalDownload']))
     traf_data['TotalUpload'] = str(
-        round(float(traf_data['TotalUpload'])/1024/1024/1024, 3))
+        bytes_to_gigabytes(traf_data['TotalUpload']))
 
     mqtt_client.pub_MQTT(idx_traffic['TotalDownload'],
                          traf_data.get('TotalDownload'))
