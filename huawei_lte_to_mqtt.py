@@ -221,7 +221,7 @@ if __name__ == "__main__":
     # get traffic statistics
     traf_data = router.get_stat()
 
-    # translate to Gigabytes
+    # translate traffic to Gigabytes
     traf_data['TotalDownload'] = str(
         bytes_to_gigabytes(traf_data['TotalDownload']))
     traf_data['TotalUpload'] = str(
@@ -235,6 +235,7 @@ if __name__ == "__main__":
     # Huawei E5186 does not display the current speed.
     # We will consider averaged in 5 minutes
     # prevDL prevUL in UserVariables used as a temporary value.
+    # Crutches and bicycles.
     prevDL = float(dz.getUserVariables(idx_traffic_variable['TotalDownload']))
     prevUL = float(dz.getUserVariables(idx_traffic_variable['TotalUpload']))
 
@@ -262,6 +263,8 @@ if __name__ == "__main__":
                              traf_data['TotalUpload'])
 
     # Reset traf on day or month
+    # This dark magic is needed when using Cron.
+    # If the script is daemonized, THIS will be somewhat better.
     today = datetime.datetime.today()
     timeHM = today.strftime("%H%M")
     timeD = today.strftime("%d")
