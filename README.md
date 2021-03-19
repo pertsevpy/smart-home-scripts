@@ -3,6 +3,6 @@ I'll just leave it here.
 
 ## CAUTION
 # work in progress
-**Put on your helmet, take care of Your head.**
+**Put on Your helmet, take care of Your head.**
 
 
